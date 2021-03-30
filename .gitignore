@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.pem
+data.json
+*changelog*.json
+yarn-error.log
+.env
