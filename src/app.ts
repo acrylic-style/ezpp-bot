@@ -8,6 +8,7 @@ dotenv.config()
 import { COMMANDS } from './commands'
 import * as data from './data'
 
+const SELF_REGEX = new RegExp(`^@${process.env.SELF}\\s+`)
 const repoOwner = process.env.REPO_OWNER as string
 
 if (process.env.ENV === 'development')
@@ -15,7 +16,8 @@ if (process.env.ENV === 'development')
 
 const checkPermissions = (author_association: string) =>
   author_association.toLowerCase() === 'owner' ||
-  author_association.toLowerCase() === 'collaborator'
+  author_association.toLowerCase() === 'collaborator' ||
+  author_association.toLowerCase() === 'member'
 
 const checkRepoOwner = (owner: string) => {
   if (process.env.ENV === 'development') return true
@@ -26,8 +28,8 @@ run((app) => {
   // handles commands
   app.on('issue_comment.created', (e) => {
     if (!checkRepoOwner(e.payload.repository.owner.login)) return
-    if (/^@ezpp-bot\s+/.test(e.payload.comment.body)) {
-      const commandBody = e.payload.comment.body.replace(/^@ezpp-bot\s+/, '')
+    if (SELF_REGEX.test(e.payload.comment.body)) {
+      const commandBody = e.payload.comment.body.replace(SELF_REGEX, '')
       if (checkPermissions(e.payload.comment.author_association)) {
         const command = commandBody.split(/\s+/)[0].toLowerCase()
         const args = commandBody.split(/\s+/).slice(1)
@@ -120,8 +122,8 @@ run((app) => {
         ? e.payload.repository.owner.login + '/'
         : ''
     const major =
-      e.payload.pull_request.labels.filter(
-        (s) => s.name.toLowerCase() === 'major'
+      e.payload.pull_request.labels.filter((s) =>
+        /(_|\b)(major)(_|\b)/.test(s.name)
       ).length > 0
     const entry = {
       category: type,
@@ -130,7 +132,13 @@ run((app) => {
       major,
     }
     if (currentGroup.entries[0].pre) {
-      currentGroup.entries[0].entries.push(entry)
+      // avoid dupe (kinda)
+      if (
+        !currentGroup.entries[0].entries.find(
+          (e) => e.category === entry.category && e.message === entry.message
+        )
+      )
+        currentGroup.entries[0].entries.push(entry)
     } else {
       currentGroup.entries.splice(0, 0, {
         version: 'Unreleased',
@@ -144,6 +152,7 @@ run((app) => {
 
   // Automatically creates the version
   // If there is a pre version on the front of the array, then that version will be modified instead.
+  // TODO: release description parser?
   app.on('release.created', async (e) => {
     if (!checkRepoOwner(e.payload.repository.owner.login)) return
     const group = (await data.getData()).groups[e.payload.repository.id]
