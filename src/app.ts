@@ -103,7 +103,8 @@ run((app) => {
   // creates entry every time a PR was merged
   // message will be the title of the PR
   // also creates pre-version object if needed
-  app.on('pull_request.merged', async (e) => {
+  app.on('pull_request.closed', async (e) => {
+    if (!e.payload.pull_request.merged) return
     if (!checkRepoOwner(e.payload.repository.owner.login)) return
     const group = (await data.getData()).groups[e.payload.repository.id]
     if (!group) return
